@@ -142,6 +142,7 @@ type Model struct {
 	rightTab rightTab
 	focus    focusArea
 
+	funcTree     TreeModel
 	lists        [leftTabCount]list.Model
 	viewer       viewport.Model
 	rightContent [rightTabCount]string
@@ -173,10 +174,7 @@ type Model struct {
 
 func NewModel(b *binpkg.Binary, pipeline *decompiler.Pipeline, cfg TUIConfig) Model {
 	funcs := symbols.FunctionList(b)
-	funcItems := make([]list.Item, len(funcs))
-	for i, sym := range funcs {
-		funcItems[i] = symbolItem{sym: sym}
-	}
+	funcTree := NewTreeModel(funcs)
 
 	strs := symbols.ExtractStrings(b)
 	strItems := make([]list.Item, len(strs))
@@ -199,11 +197,16 @@ func NewModel(b *binpkg.Binary, pipeline *decompiler.Pipeline, cfg TUIConfig) Mo
 	}
 
 	d := newDelegate()
-	allItems := [][]list.Item{funcItems, strItems, impItems, secItems}
+	// Functions tab uses the tree; other tabs use flat lists.
+	allItems := [][]list.Item{nil, strItems, impItems, secItems}
 
 	var lists [leftTabCount]list.Model
 	for i := range lists {
-		l := list.New(allItems[i], d, 40, 20)
+		items := allItems[i]
+		if items == nil {
+			items = []list.Item{}
+		}
+		l := list.New(items, d, 40, 20)
 		l.SetShowTitle(false)
 		l.SetShowStatusBar(true)
 		l.SetFilteringEnabled(true)
@@ -228,6 +231,7 @@ func NewModel(b *binpkg.Binary, pipeline *decompiler.Pipeline, cfg TUIConfig) Mo
 		leftTab:    leftTabFunctions,
 		rightTab:   rightTabSource,
 		focus:      focusLeft,
+		funcTree:   funcTree,
 		lists:      lists,
 		viewer:     viewport.New(80, 20),
 		chatInput:  chat,
@@ -339,9 +343,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch m.focus {
 	case focusLeft:
-		var cmd tea.Cmd
-		m.lists[m.leftTab], cmd = m.lists[m.leftTab].Update(msg)
-		cmds = append(cmds, cmd)
+		if m.leftTab != leftTabFunctions {
+			var cmd tea.Cmd
+			m.lists[m.leftTab], cmd = m.lists[m.leftTab].Update(msg)
+			cmds = append(cmds, cmd)
+		}
 	case focusRight:
 		var cmd tea.Cmd
 		m.viewer, cmd = m.viewer.Update(msg)
@@ -416,8 +422,29 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// While list is filtering, pass through
-	if m.focus == focusLeft && m.lists[m.leftTab].SettingFilter() {
+	// Tree filter mode: capture all input for the filter string.
+	if m.focus == focusLeft && m.leftTab == leftTabFunctions && m.funcTree.filtering {
+		switch key {
+		case "esc":
+			m.funcTree.filtering = false
+			m.funcTree.SetFilter("")
+		case "enter":
+			m.funcTree.filtering = false
+		case "backspace":
+			f := m.funcTree.filter
+			if len(f) > 0 {
+				m.funcTree.SetFilter(f[:len(f)-1])
+			}
+		default:
+			if len(key) == 1 && key >= " " {
+				m.funcTree.SetFilter(m.funcTree.filter + key)
+			}
+		}
+		return m, nil
+	}
+
+	// While list is filtering, pass through.
+	if m.focus == focusLeft && m.leftTab != leftTabFunctions && m.lists[m.leftTab].SettingFilter() {
 		var cmd tea.Cmd
 		m.lists[m.leftTab], cmd = m.lists[m.leftTab].Update(msg)
 		return m, cmd
@@ -469,10 +496,32 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "m":
 		m.statusMsg = "Loading models…"
 		return m, m.loadModels()
+	case " ":
+		if m.focus == focusLeft && m.leftTab == leftTabFunctions {
+			m.funcTree.Toggle()
+			return m, nil
+		}
+	case "/":
+		if m.focus == focusLeft {
+			if m.leftTab == leftTabFunctions {
+				m.funcTree.filtering = true
+				m.funcTree.filter = ""
+				return m, nil
+			}
+			// Other tabs: pass to list for its built-in filter.
+			var cmd tea.Cmd
+			m.lists[m.leftTab], cmd = m.lists[m.leftTab].Update(msg)
+			return m, cmd
+		}
 	case "d", "enter":
 		if m.focus == focusLeft {
 			switch m.leftTab {
 			case leftTabFunctions:
+				if m.funcTree.SelectedSymbol() == nil {
+					// Group node: toggle expand/collapse.
+					m.funcTree.Toggle()
+					return m, nil
+				}
 				return m, m.startDecompile()
 			case leftTabSections:
 				m.loadSectionHex()
@@ -481,6 +530,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	default:
 		switch m.focus {
 		case focusLeft:
+			if m.leftTab == leftTabFunctions {
+				switch key {
+				case "j", "down":
+					m.funcTree.Down()
+				case "k", "up":
+					m.funcTree.Up()
+				case "pgup":
+					m.funcTree.PageUp()
+				case "pgdown":
+					m.funcTree.PageDown()
+				}
+				return m, nil
+			}
 			var cmd tea.Cmd
 			m.lists[m.leftTab], cmd = m.lists[m.leftTab].Update(msg)
 			return m, cmd
@@ -532,14 +594,22 @@ func (m Model) viewLeft(w, h int) string {
 	if lh < 3 {
 		lh = 3
 	}
-	m.lists[m.leftTab].SetSize(w-2, lh)
+
+	var content string
+	if m.leftTab == leftTabFunctions {
+		m.funcTree.SetSize(w-2, lh)
+		content = m.funcTree.View()
+	} else {
+		m.lists[m.leftTab].SetSize(w-2, lh)
+		content = m.lists[m.leftTab].View()
+	}
 
 	border := styleBorder
 	if m.focus == focusLeft {
 		border = styleBorderActive
 	}
 	return border.Width(w).Height(h).Render(
-		lipgloss.JoinVertical(lipgloss.Left, tabs, m.lists[m.leftTab].View()),
+		lipgloss.JoinVertical(lipgloss.Left, tabs, content),
 	)
 }
 
@@ -611,12 +681,18 @@ func (m Model) viewHelp() string {
 
   Navigation
     tab          Switch focus between left and right panel
-    j / k        Move up / down in list
-    /            Filter list  (esc to clear)
+    j / k        Move up / down in list or tree
+    /            Filter by name  (esc to clear)
     esc          Cancel decompilation / close chat / close help
 
+  Functions Tree
+    +/-          Expand / collapse module groups
+    space        Toggle expand / collapse
+    enter / d    Decompile selected function
+    /            Filter functions by name
+
   Left Panel  (tabs)
-    f            Functions
+    f            Functions  (tree view)
     s            Strings
     i            Imports
     x            Sections
@@ -650,15 +726,11 @@ func (m *Model) startDecompile() tea.Cmd {
 		m.statusMsg = "Ollama not connected"
 		return nil
 	}
-	sel := m.lists[leftTabFunctions].SelectedItem()
-	if sel == nil {
+	sym := m.funcTree.SelectedSymbol()
+	if sym == nil {
 		return nil
 	}
-	item, ok := sel.(symbolItem)
-	if !ok {
-		return nil
-	}
-	fn := item.sym.Name
+	fn := sym.Name
 	m.selectedFn = fn
 	m.streaming = true
 	m.streamBuf.Reset()
@@ -793,6 +865,7 @@ func (m *Model) setRight(tab rightTab, content string) {
 
 func (m *Model) recalcSizes() {
 	lw, rw, ch := m.dims()
+	m.funcTree.SetSize(lw-4, ch-4)
 	for i := range m.lists {
 		m.lists[i].SetSize(lw-4, ch-4)
 	}
