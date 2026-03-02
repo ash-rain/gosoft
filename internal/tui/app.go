@@ -13,6 +13,7 @@ import (
 
 	"godecomp/internal/ai"
 	binpkg "godecomp/internal/binary"
+	ctxpkg "godecomp/internal/context"
 	"godecomp/internal/decompiler"
 	"godecomp/internal/symbols"
 )
@@ -722,16 +723,24 @@ func (m Model) viewHelp() string {
 // ── Actions ───────────────────────────────────────────────────────────────
 
 func (m *Model) startDecompile() tea.Cmd {
-	if m.pipeline == nil {
-		m.statusMsg = "Ollama not connected"
-		return nil
-	}
 	sym := m.funcTree.SelectedSymbol()
 	if sym == nil {
 		return nil
 	}
 	fn := sym.Name
 	m.selectedFn = fn
+
+	// Build the function context to populate the disasm and hex tabs.
+	m.populateDisasm(fn)
+
+	if m.pipeline == nil {
+		m.statusMsg = "Ollama not connected — disassembly only"
+		m.rightTab = rightTabDisasm
+		m.viewer.SetContent(m.rightContent[rightTabDisasm])
+		m.viewer.GotoTop()
+		return nil
+	}
+
 	m.streaming = true
 	m.streamBuf.Reset()
 	m.statusMsg = fmt.Sprintf("Decompiling %s…", fn)
@@ -786,6 +795,34 @@ func (m *Model) loadSectionHex() {
 	m.viewer.SetContent(hex)
 	m.viewer.GotoTop()
 	m.statusMsg = fmt.Sprintf("Hex: %s (%d B)", item.sec.Name, item.sec.Size)
+}
+
+// populateDisasm builds the function context and fills the Disasm and Hex
+// tabs for the given function, independently of AI decompilation.
+func (m *Model) populateDisasm(funcName string) {
+	funcCtx, err := decompiler.BuildFunctionContext(m.binary, funcName)
+	if err != nil {
+		m.setRight(rightTabDisasm, fmt.Sprintf("(disassembly error: %v)", err))
+		return
+	}
+	m.setRight(rightTabDisasm, formatDisassembly(funcCtx.Disassembly))
+	m.populateHexFromContext(funcCtx)
+}
+
+// populateHexFromContext fills the Hex tab with the raw bytes of the function.
+func (m *Model) populateHexFromContext(funcCtx *ctxpkg.FunctionContext) {
+	if len(funcCtx.Disassembly) == 0 {
+		return
+	}
+	// Reconstruct raw bytes from instructions for a hex dump.
+	baseAddr := funcCtx.Disassembly[0].Address
+	var raw []byte
+	for _, inst := range funcCtx.Disassembly {
+		raw = append(raw, inst.Bytes...)
+	}
+	if len(raw) > 0 {
+		m.setRight(rightTabHex, formatHex(raw, baseAddr, 16))
+	}
 }
 
 func (m *Model) sendChatMessage(question string) tea.Cmd {

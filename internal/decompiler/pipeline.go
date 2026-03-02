@@ -28,28 +28,36 @@ func New(provider ai.Provider) *Pipeline {
 	return &Pipeline{provider: provider}
 }
 
-// DecompileFunction decompiles a single named function from the binary.
-func (p *Pipeline) DecompileFunction(goCtx context.Context, b *binpkg.Binary, funcName string, opts Options) (string, error) {
-	// Find the function symbol
+// BuildFunctionContext builds the disassembly-level context for a function
+// without calling the AI provider. This is useful for populating the
+// disassembly view in the TUI independently of decompilation.
+func BuildFunctionContext(b *binpkg.Binary, funcName string) (*ctxpkg.FunctionContext, error) {
 	sym := symbols.FindSymbol(b, funcName)
 	if sym == nil {
-		return "", fmt.Errorf("function %q not found in binary", funcName)
+		return nil, fmt.Errorf("function %q not found in binary", funcName)
 	}
 
-	// Use IL disassembler for .NET assemblies, native arch otherwise
 	archStr := string(b.Arch)
 	if b.Format == binpkg.FormatDotNet {
 		archStr = "il"
 	}
 	d, err := disasm.New(archStr)
 	if err != nil {
-		return "", fmt.Errorf("creating disassembler for arch %q: %w", archStr, err)
+		return nil, fmt.Errorf("creating disassembler for arch %q: %w", archStr, err)
 	}
 
-	// Build function context
 	funcCtx, err := ctxpkg.Build(b, sym, d)
 	if err != nil {
-		return "", fmt.Errorf("building function context for %q: %w", funcName, err)
+		return nil, fmt.Errorf("building function context for %q: %w", funcName, err)
+	}
+	return funcCtx, nil
+}
+
+// DecompileFunction decompiles a single named function from the binary.
+func (p *Pipeline) DecompileFunction(goCtx context.Context, b *binpkg.Binary, funcName string, opts Options) (string, error) {
+	funcCtx, err := BuildFunctionContext(b, funcName)
+	if err != nil {
+		return "", err
 	}
 
 	// Build prompts
@@ -76,25 +84,9 @@ func (p *Pipeline) DecompileFunction(goCtx context.Context, b *binpkg.Binary, fu
 
 // DecompileFunctionStream decompiles and streams tokens to the out channel.
 func (p *Pipeline) DecompileFunctionStream(goCtx context.Context, b *binpkg.Binary, funcName string, opts Options, out chan<- ai.StreamChunk) error {
-	// Find the function symbol
-	sym := symbols.FindSymbol(b, funcName)
-	if sym == nil {
-		return fmt.Errorf("function %q not found in binary", funcName)
-	}
-
-	archStr := string(b.Arch)
-	if b.Format == binpkg.FormatDotNet {
-		archStr = "il"
-	}
-	d, err := disasm.New(archStr)
+	funcCtx, err := BuildFunctionContext(b, funcName)
 	if err != nil {
-		return fmt.Errorf("creating disassembler for arch %q: %w", archStr, err)
-	}
-
-	// Build function context
-	funcCtx, err := ctxpkg.Build(b, sym, d)
-	if err != nil {
-		return fmt.Errorf("building function context for %q: %w", funcName, err)
+		return err
 	}
 
 	// Build prompts

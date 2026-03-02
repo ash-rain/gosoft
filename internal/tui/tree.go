@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	binpkg "godecomp/internal/binary"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
