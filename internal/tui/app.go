@@ -154,10 +154,11 @@ type Model struct {
 	streaming  bool
 	streamChan chan ai.StreamChunk
 	streamBuf  strings.Builder
+	cancelFunc context.CancelFunc
 
 	// Model picker
-	modelPicker    list.Model
-	modelPickerOn  bool
+	modelPicker     list.Model
+	modelPickerOn   bool
 	availableModels []string
 
 	targetLang string
@@ -404,6 +405,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key == "ctrl+c" {
 		return m, tea.Quit
 	}
+	if key == "esc" && m.streaming {
+		m.cancelStream()
+		return m, nil
+	}
 	if key == "esc" && m.chatActive {
 		m.chatActive = false
 		m.focus = focusLeft
@@ -608,7 +613,7 @@ func (m Model) viewHelp() string {
     tab          Switch focus between left and right panel
     j / k        Move up / down in list
     /            Filter list  (esc to clear)
-    esc          Close chat / close help
+    esc          Cancel decompilation / close chat / close help
 
   Left Panel  (tabs)
     f            Functions
@@ -626,6 +631,7 @@ func (m Model) viewHelp() string {
     l            Cycle target language: go → c → rust → python → ts → java → csharp
     m            Select AI model from downloaded Ollama models
     c            Chat — ask AI a question about this binary
+    esc          Cancel running decompilation or chat
     ?            Toggle this help
     q / ctrl+c   Quit`
 
@@ -666,8 +672,11 @@ func (m *Model) startDecompile() tea.Cmd {
 	ch := make(chan ai.StreamChunk, 128)
 	m.streamChan = ch
 
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelFunc = cancel
+
 	return func() tea.Msg {
-		err := pipe.DecompileFunctionStream(context.Background(), b, fn,
+		err := pipe.DecompileFunctionStream(ctx, b, fn,
 			decompiler.Options{TargetLang: lang, Stream: true}, ch)
 		if err != nil {
 			return streamChunkMsg{chunk: ai.StreamChunk{Error: err, Done: true}}
@@ -714,9 +723,9 @@ func (m *Model) sendChatMessage(question string) tea.Cmd {
 	}
 	b := m.binary
 	funcs := symbols.FunctionList(b)
-	ctx := fmt.Sprintf("Binary: %s (%s/%s, %s)\nFunctions: %d  Imports: %d  Strings: %d",
+	binaryCtx := fmt.Sprintf("Binary: %s (%s/%s, %s)\nFunctions: %d  Imports: %d  Strings: %d",
 		b.Path, b.Arch, b.OS, b.Format, len(funcs), len(b.Imports), len(b.Strings))
-	prompt := ctx + "\n\nQuestion: " + question
+	prompt := binaryCtx + "\n\nQuestion: " + question
 	sys := "You are a binary analysis expert. Answer questions about binary files concisely."
 
 	m.chatBuffer.Reset()
@@ -729,8 +738,11 @@ func (m *Model) sendChatMessage(question string) tea.Cmd {
 	m.chatChan = ch
 	pipe := m.pipeline
 
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelFunc = cancel
+
 	return func() tea.Msg {
-		if err := pipe.AskStream(context.Background(), sys, prompt, ch); err != nil {
+		if err := pipe.AskStream(ctx, sys, prompt, ch); err != nil {
 			return chatResponseMsg{chunk: ai.StreamChunk{Error: err, Done: true}}
 		}
 		return m.waitChat()()
@@ -749,6 +761,25 @@ func (m *Model) waitChat() tea.Cmd {
 		}
 		return chatResponseMsg{chunk: chunk}
 	}
+}
+
+func (m *Model) cancelStream() {
+	if m.cancelFunc != nil {
+		m.cancelFunc()
+		m.cancelFunc = nil
+	}
+	m.streaming = false
+	partial := m.streamBuf.String()
+	m.streamBuf.Reset()
+	if partial != "" {
+		partial += "\n\n— cancelled —"
+		m.setRight(rightTabSource, partial)
+		m.viewer.SetContent(partial)
+	} else {
+		m.setRight(rightTabSource, "(cancelled)")
+		m.viewer.SetContent("(cancelled)")
+	}
+	m.statusMsg = "Cancelled"
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
