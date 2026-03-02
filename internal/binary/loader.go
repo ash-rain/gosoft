@@ -1,6 +1,7 @@
 package binary
 
 import (
+	"debug/pe"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ const (
 	FormatPE      Format = "PE"
 	FormatMachO   Format = "MachO"
 	FormatWASM    Format = "WASM"
+	FormatDotNet  Format = "DotNet"
 	FormatUnknown Format = "Unknown"
 )
 
@@ -87,6 +89,15 @@ func Load(path string) (*Binary, error) {
 	case FormatELF:
 		return loadELF(path)
 	case FormatPE:
+		// Check if it's a .NET/Mono assembly before loading as plain PE
+		pef, peErr := pe.Open(path)
+		if peErr == nil {
+			isDotNet := isDotNetPE(pef)
+			pef.Close()
+			if isDotNet {
+				return loadDotNet(path)
+			}
+		}
 		return loadPE(path)
 	case FormatMachO:
 		return loadMachO(path)

@@ -13,6 +13,7 @@ import (
 
 	"godecomp/internal/ai"
 	"godecomp/internal/binary"
+	"godecomp/internal/decompiler"
 	"godecomp/internal/symbols"
 	"godecomp/pkg/godecomp"
 )
@@ -451,20 +452,5 @@ func newModelsCmd() *cobra.Command {
 
 // langExtension returns the file extension for a given language.
 func langExtension(lang string) string {
-	switch lang {
-	case "go":
-		return ".go"
-	case "c":
-		return ".c"
-	case "rust":
-		return ".rs"
-	case "python":
-		return ".py"
-	case "typescript":
-		return ".ts"
-	case "java":
-		return ".java"
-	default:
-		return ".txt"
-	}
+	return decompiler.LangExtension(lang)
 }

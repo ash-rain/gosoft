@@ -21,8 +21,15 @@ type FunctionContext struct {
 }
 
 // Build builds a FunctionContext for the given symbol in the binary.
-// It finds the symbol's section, disassembles its bytes, and collects context.
+// For .NET assemblies the IL disassembler is selected automatically.
 func Build(b *binary.Binary, sym *binary.Symbol, d disasm.Disassembler) (*FunctionContext, error) {
+	// Override disassembler for .NET binaries
+	if b.Format == binary.FormatDotNet && (d == nil || d.Arch() != "il") {
+		ilDis, err := disasm.New("il")
+		if err == nil {
+			d = ilDis
+		}
+	}
 	if b == nil {
 		return nil, fmt.Errorf("binary is nil")
 	}
@@ -41,33 +48,45 @@ func Build(b *binary.Binary, sym *binary.Symbol, d disasm.Disassembler) (*Functi
 		Imports:    b.Imports,
 	}
 
-	// Find the section containing this symbol
+	// Find the section containing this symbol.
+	// For .NET assemblies, IL sections store Offset == sym.Address (the RVA).
 	var funcData []byte
 	var funcOffset uint64
 
+	// First: try exact IL section match (for .NET)
+	ilSectionName := "IL:" + sym.Name
 	for _, sec := range b.Sections {
-		secEnd := sec.Offset + sec.Size
-		if sym.Address >= sec.Offset && sym.Address < secEnd {
-			// Symbol is in this section
-			relOffset := sym.Address - sec.Offset
-			if relOffset >= uint64(len(sec.Data)) {
-				continue
-			}
-
-			var end uint64
-			if sym.Size > 0 {
-				end = relOffset + sym.Size
-			} else {
-				// Use up to 512 bytes if size unknown
-				end = relOffset + 512
-			}
-			if end > uint64(len(sec.Data)) {
-				end = uint64(len(sec.Data))
-			}
-
-			funcData = sec.Data[relOffset:end]
-			funcOffset = sym.Address
+		if sec.Name == ilSectionName {
+			funcData = sec.Data
+			funcOffset = sec.Offset
 			break
+		}
+	}
+
+	// Fallback: scan sections by address range
+	if len(funcData) == 0 {
+		for _, sec := range b.Sections {
+			secEnd := sec.Offset + sec.Size
+			if sym.Address >= sec.Offset && sym.Address < secEnd {
+				relOffset := sym.Address - sec.Offset
+				if relOffset >= uint64(len(sec.Data)) {
+					continue
+				}
+
+				var end uint64
+				if sym.Size > 0 {
+					end = relOffset + sym.Size
+				} else {
+					end = relOffset + 512
+				}
+				if end > uint64(len(sec.Data)) {
+					end = uint64(len(sec.Data))
+				}
+
+				funcData = sec.Data[relOffset:end]
+				funcOffset = sym.Address
+				break
+			}
 		}
 	}
 

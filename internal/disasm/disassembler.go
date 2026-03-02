@@ -37,6 +37,8 @@ func New(arch string) (Disassembler, error) {
 		return &armDisasm{bits: 32}, nil
 	case "arm64":
 		return &armDisasm{bits: 64}, nil
+	case "il", "msil", "cil", "dotnet":
+		return &ilDisasm{}, nil
 	default:
 		return nil, &errUnsupportedArch{arch: arch}
 	}
