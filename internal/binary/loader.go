@@ -15,7 +15,6 @@ const (
 	FormatPE      Format = "PE"
 	FormatMachO   Format = "MachO"
 	FormatWASM    Format = "WASM"
-	FormatDotNet  Format = "DotNet"
 	FormatUnknown Format = "Unknown"
 )
 

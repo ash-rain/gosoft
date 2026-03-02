@@ -114,7 +114,7 @@ func formatILOperand(mnemonic string, data []byte, nextPC uint64) string {
 			"leave", "leave.s":
 			target := int64(nextPC) + int64(int32(val))
 			return fmt.Sprintf("IL_%04X", target)
-		case "call", "callvirt", "newobj", "ldftn", "ldvirtftn",
+		case "call", "callvirt", "ldftn", "ldvirtftn",
 			"jmp", "calli":
 			return fmt.Sprintf("0x%08X", val)
 		case "ldstr":

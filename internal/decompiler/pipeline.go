@@ -36,10 +36,14 @@ func (p *Pipeline) DecompileFunction(goCtx context.Context, b *binpkg.Binary, fu
 		return "", fmt.Errorf("function %q not found in binary", funcName)
 	}
 
-	// Create disassembler
-	d, err := disasm.New(string(b.Arch))
+	// Use IL disassembler for .NET assemblies, native arch otherwise
+	archStr := string(b.Arch)
+	if b.Format == binpkg.FormatDotNet {
+		archStr = "il"
+	}
+	d, err := disasm.New(archStr)
 	if err != nil {
-		return "", fmt.Errorf("creating disassembler for arch %q: %w", b.Arch, err)
+		return "", fmt.Errorf("creating disassembler for arch %q: %w", archStr, err)
 	}
 
 	// Build function context
@@ -78,10 +82,13 @@ func (p *Pipeline) DecompileFunctionStream(goCtx context.Context, b *binpkg.Bina
 		return fmt.Errorf("function %q not found in binary", funcName)
 	}
 
-	// Create disassembler
-	d, err := disasm.New(string(b.Arch))
+	archStr := string(b.Arch)
+	if b.Format == binpkg.FormatDotNet {
+		archStr = "il"
+	}
+	d, err := disasm.New(archStr)
 	if err != nil {
-		return fmt.Errorf("creating disassembler for arch %q: %w", b.Arch, err)
+		return fmt.Errorf("creating disassembler for arch %q: %w", archStr, err)
 	}
 
 	// Build function context
@@ -104,6 +111,15 @@ func (p *Pipeline) DecompileFunctionStream(goCtx context.Context, b *binpkg.Bina
 		SystemPrompt: sysPrompt,
 		UserPrompt:   userPrompt,
 		Model:        opts.Model,
+		Stream:       true,
+	}, out)
+}
+
+// AskStream streams an open-ended question about the binary to the out channel.
+func (p *Pipeline) AskStream(goCtx context.Context, systemPrompt, userPrompt string, out chan<- ai.StreamChunk) error {
+	return p.provider.Stream(goCtx, ai.CompletionRequest{
+		SystemPrompt: systemPrompt,
+		UserPrompt:   userPrompt,
 		Stream:       true,
 	}, out)
 }
