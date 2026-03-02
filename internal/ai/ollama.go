@@ -14,7 +14,7 @@ import (
 // OllamaProvider implements the Provider interface for Ollama.
 type OllamaProvider struct {
 	BaseURL string // default "http://localhost:11434"
-	Model   string // default "deepseek-coder:7b"
+	Model   string // default "deepseek-coder:latest"
 	client  *http.Client
 }
 
@@ -24,7 +24,7 @@ func NewOllama(baseURL, model string) *OllamaProvider {
 		baseURL = "http://localhost:11434"
 	}
 	if model == "" {
-		model = "deepseek-coder:7b"
+		model = "deepseek-coder:latest"
 	}
 	return &OllamaProvider{
 		BaseURL: baseURL,

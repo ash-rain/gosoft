@@ -20,7 +20,7 @@ func makeOllamaTagsHandler() http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"models": []map[string]interface{}{
-				{"name": "deepseek-coder:7b", "size": 1234567890},
+				{"name": "deepseek-coder:latest", "size": 1234567890},
 			},
 		})
 	}

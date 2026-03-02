@@ -37,7 +37,7 @@ models or free cloud AI providers.`,
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&ollamaURL, "ollama-url", "http://localhost:11434",
 		"Ollama API URL")
-	rootCmd.PersistentFlags().StringVar(&model, "model", "deepseek-coder:7b",
+	rootCmd.PersistentFlags().StringVar(&model, "model", "deepseek-coder:latest",
 		"AI model to use")
 	rootCmd.PersistentFlags().StringVar(&opencodeURL, "opencode-url", "",
 		"OpenCode-compatible API URL (optional)")
@@ -435,7 +435,7 @@ func newModelsCmd() *cobra.Command {
 			}
 
 			if len(result.Models) == 0 {
-				fmt.Println("No models found. Pull one with: ollama pull deepseek-coder:7b")
+				fmt.Println("No models found. Pull one with: ollama pull deepseek-coder:latest")
 				return nil
 			}
 

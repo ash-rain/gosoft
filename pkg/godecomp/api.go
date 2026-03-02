@@ -25,7 +25,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		OllamaURL:   "http://localhost:11434",
-		OllamaModel: "deepseek-coder:7b",
+		OllamaModel: "deepseek-coder:latest",
 		DefaultLang: "go",
 	}
 }
@@ -53,7 +53,7 @@ func Open(path string, cfg Config) (*Session, error) {
 	}
 	ollamaModel := cfg.OllamaModel
 	if ollamaModel == "" {
-		ollamaModel = "deepseek-coder:7b"
+		ollamaModel = "deepseek-coder:latest"
 	}
 	providers = append(providers, ai.NewOllama(ollamaURL, ollamaModel))
 
@@ -107,7 +107,14 @@ func (s *Session) DecompileStream(ctx context.Context, funcName, targetLang stri
 
 // StartTUI launches the interactive TUI.
 func (s *Session) StartTUI() error {
-	return tui.Run(s.Binary, s.Pipeline)
+	cfg := tui.TUIConfig{
+		OllamaURL:      s.config.OllamaURL,
+		OllamaModel:    s.config.OllamaModel,
+		OpenCodeURL:    s.config.OpenCodeURL,
+		OpenCodeAPIKey: s.config.OpenCodeAPIKey,
+		OpenCodeModel:  s.config.OpenCodeModel,
+	}
+	return tui.Run(s.Binary, s.Pipeline, cfg)
 }
 
 // Symbols returns all function symbols.

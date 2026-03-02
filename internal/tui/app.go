@@ -114,12 +114,29 @@ type decompileResultMsg struct {
 
 type streamChunkMsg struct{ chunk ai.StreamChunk }
 type chatResponseMsg struct{ chunk ai.StreamChunk }
+type modelsLoadedMsg struct {
+	models []string
+	err    error
+}
+
+// ── TUI Config ───────────────────────────────────────────────────────────
+
+// TUIConfig holds the AI provider configuration for the TUI,
+// allowing it to rebuild the pipeline when the model changes.
+type TUIConfig struct {
+	OllamaURL      string
+	OllamaModel    string
+	OpenCodeURL    string
+	OpenCodeAPIKey string
+	OpenCodeModel  string
+}
 
 // ── Model ─────────────────────────────────────────────────────────────────
 
 type Model struct {
 	binary   *binpkg.Binary
 	pipeline *decompiler.Pipeline
+	tuiCfg   TUIConfig
 
 	leftTab  leftTab
 	rightTab rightTab
@@ -138,6 +155,11 @@ type Model struct {
 	streamChan chan ai.StreamChunk
 	streamBuf  strings.Builder
 
+	// Model picker
+	modelPicker    list.Model
+	modelPickerOn  bool
+	availableModels []string
+
 	targetLang string
 	statusMsg  string
 	selectedFn string
@@ -148,7 +170,7 @@ type Model struct {
 
 // ── Constructor ───────────────────────────────────────────────────────────
 
-func NewModel(b *binpkg.Binary, pipeline *decompiler.Pipeline) Model {
+func NewModel(b *binpkg.Binary, pipeline *decompiler.Pipeline, cfg TUIConfig) Model {
 	funcs := symbols.FunctionList(b)
 	funcItems := make([]list.Item, len(funcs))
 	for i, sym := range funcs {
@@ -201,6 +223,7 @@ func NewModel(b *binpkg.Binary, pipeline *decompiler.Pipeline) Model {
 	m := Model{
 		binary:     b,
 		pipeline:   pipeline,
+		tuiCfg:     cfg,
 		leftTab:    leftTabFunctions,
 		rightTab:   rightTabSource,
 		focus:      focusLeft,
@@ -279,6 +302,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewer.SetContent(m.chatBuffer.String())
 			cmds = append(cmds, m.waitChat())
 		}
+
+	case modelsLoadedMsg:
+		if msg.err != nil {
+			m.statusMsg = "Error loading models: " + msg.err.Error()
+			m.modelPickerOn = false
+		} else {
+			m.availableModels = msg.models
+			items := make([]list.Item, len(msg.models))
+			for i, name := range msg.models {
+				items[i] = modelItem{name: name, current: name == m.tuiCfg.OllamaModel}
+			}
+			d := newDelegate()
+			m.modelPicker = list.New(items, d, 50, 15)
+			m.modelPicker.Title = "Select Model"
+			m.modelPicker.SetShowTitle(true)
+			m.modelPicker.SetFilteringEnabled(true)
+			m.modelPicker.SetShowStatusBar(true)
+			m.modelPicker.Styles.Title = styleTabActive
+			if m.width > 0 {
+				pw := m.width * 40 / 100
+				if pw < 40 {
+					pw = 40
+				}
+				ph := m.height - 10
+				if ph < 10 {
+					ph = 10
+				}
+				m.modelPicker.SetSize(pw, ph)
+			}
+			m.modelPickerOn = true
+			m.statusMsg = fmt.Sprintf("Models: %d available", len(msg.models))
+		}
 	}
 
 	switch m.focus {
@@ -301,6 +356,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
+
+	// Model picker overlay
+	if m.modelPickerOn {
+		switch key {
+		case "enter":
+			sel := m.modelPicker.SelectedItem()
+			if sel != nil {
+				if item, ok := sel.(modelItem); ok {
+					m.modelPickerOn = false
+					return m, m.switchModel(item.name)
+				}
+			}
+		case "esc", "q":
+			m.modelPickerOn = false
+			return m, nil
+		default:
+			var cmd tea.Cmd
+			m.modelPicker, cmd = m.modelPicker.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+	}
 
 	if m.focus == focusChat {
 		switch key {
@@ -384,6 +461,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l":
 		m.targetLang = cycleLang(m.targetLang)
 		m.statusMsg = "Language: " + decompiler.LangDisplayName(m.targetLang)
+	case "m":
+		m.statusMsg = "Loading models…"
+		return m, m.loadModels()
 	case "d", "enter":
 		if m.focus == focusLeft {
 			switch m.leftTab {
@@ -418,6 +498,9 @@ func (m Model) View() string {
 	if m.showHelp {
 		return m.viewHelp()
 	}
+	if m.modelPickerOn {
+		return m.viewModelPicker()
+	}
 
 	lw, rw, ch := m.dims()
 	panels := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -426,7 +509,7 @@ func (m Model) View() string {
 	)
 
 	hint := styleHelp.Width(m.width).Render(
-		" [tab] focus  [f/s/i/x] panel  [1/2/3] view  [d] decompile  [l] lang  [c] chat  [?] help  [q] quit",
+		" [tab] focus  [f/s/i/x] panel  [1/2/3] view  [d] decompile  [l] lang  [m] model  [c] chat  [?] help  [q] quit",
 	)
 
 	rows := []string{panels, hint}
@@ -506,10 +589,11 @@ func (m Model) viewStatus() string {
 		streaming = " ⟳"
 	}
 	_ = aiDot
-	text := fmt.Sprintf(" %s  %s/%s  %s  lang:%-7s  %s%s ",
+	text := fmt.Sprintf(" %s  %s/%s  %s  model:%-18s  lang:%-7s  %s%s ",
 		truncateString(m.binary.Path, 26),
 		m.binary.OS, m.binary.Arch,
 		m.binary.Format,
+		truncateString(m.tuiCfg.OllamaModel, 18),
 		m.targetLang,
 		m.statusMsg,
 		streaming,
@@ -540,6 +624,7 @@ func (m Model) viewHelp() string {
   Actions
     d / enter    Decompile selected function  (or hex-view selected section)
     l            Cycle target language: go → c → rust → python → ts → java → csharp
+    m            Select AI model from downloaded Ollama models
     c            Chat — ask AI a question about this binary
     ?            Toggle this help
     q / ctrl+c   Quit`
@@ -743,9 +828,72 @@ func newDelegate() list.DefaultDelegate {
 	return d
 }
 
+// ── Model Picker ──────────────────────────────────────────────────────────
+
+// modelItem wraps an Ollama model name for the list widget.
+type modelItem struct {
+	name    string
+	current bool
+}
+
+func (i modelItem) Title() string {
+	if i.current {
+		return "● " + i.name
+	}
+	return "  " + i.name
+}
+func (i modelItem) Description() string {
+	if i.current {
+		return "currently active"
+	}
+	return ""
+}
+func (i modelItem) FilterValue() string { return i.name }
+
+func (m Model) viewModelPicker() string {
+	title := styleHelpBox.Width(m.width - 4).Render(m.modelPicker.View())
+	pad := (m.height - lipgloss.Height(title)) / 2
+	if pad < 0 {
+		pad = 0
+	}
+	return strings.Repeat("\n", pad) + title
+}
+
+func (m *Model) loadModels() tea.Cmd {
+	url := m.tuiCfg.OllamaURL
+	if url == "" {
+		url = "http://localhost:11434"
+	}
+	return func() tea.Msg {
+		ollama := ai.NewOllama(url, "")
+		models, err := ollama.ListModels(context.Background())
+		return modelsLoadedMsg{models: models, err: err}
+	}
+}
+
+func (m *Model) switchModel(modelName string) tea.Cmd {
+	m.tuiCfg.OllamaModel = modelName
+
+	// Rebuild the AI pipeline with the new model.
+	var providers []ai.Provider
+	providers = append(providers, ai.NewOllama(m.tuiCfg.OllamaURL, modelName))
+	if m.tuiCfg.OpenCodeURL != "" && m.tuiCfg.OpenCodeAPIKey != "" {
+		providers = append(providers, ai.NewOpenCode(
+			m.tuiCfg.OpenCodeURL,
+			m.tuiCfg.OpenCodeAPIKey,
+			m.tuiCfg.OpenCodeModel,
+		))
+	}
+	router := ai.NewRouter(providers...)
+	m.pipeline = decompiler.New(router)
+
+	m.statusMsg = fmt.Sprintf("Switched to model: %s", modelName)
+	return nil
+}
+
 // Run starts the TUI application.
-func Run(b *binpkg.Binary, pipeline *decompiler.Pipeline) error {
-	m := NewModel(b, pipeline)
+func Run(b *binpkg.Binary, pipeline *decompiler.Pipeline, cfg TUIConfig) error {
+	m := NewModel(b, pipeline, cfg)
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err

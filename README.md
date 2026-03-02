@@ -25,7 +25,7 @@ Uses a local [Ollama](https://ollama.com) model by default — no API keys, no d
 
 - **Go 1.21+**
 - **[Ollama](https://ollama.com)** running locally (default: `http://localhost:11434`)
-- At least one Ollama model pulled, e.g. `ollama pull deepseek-coder:7b`
+- At least one Ollama model pulled, e.g. `ollama pull deepseek-coder:latest`
 
 ## Build
 
@@ -110,6 +110,7 @@ godecomp models
 | `3` | Right tab: Hex dump |
 | `d` / `enter` | Decompile selected function (or hex-view selected section) |
 | `l` | Cycle target language |
+| `m` | Select AI model from downloaded Ollama models |
 | `c` | Open chat — ask AI about the binary |
 | `?` | Help overlay |
 | `q` / `ctrl+c` | Quit |
@@ -148,7 +149,7 @@ The router prefers Ollama and falls back to the cloud provider if Ollama is unav
 Recommended models:
 
 ```bash
-ollama pull deepseek-coder:7b     # fast, good quality
+ollama pull deepseek-coder:latest  # fast, good quality
 ollama pull deepseek-coder:33b    # best quality
 ollama pull codellama:13b         # alternative
 ```
@@ -157,10 +158,12 @@ ollama pull codellama:13b         # alternative
 
 ```
 --ollama-url   Ollama API URL          (default: http://localhost:11434)
---model        Model name              (default: deepseek-coder:7b)
+--model        Model name              (default: deepseek-coder:latest)
 --opencode-url OpenCode-compatible URL (optional)
 --opencode-key OpenCode API key        (optional)
 ```
+
+You can also switch models interactively in the TUI by pressing `m` to open the model picker, which lists all locally downloaded Ollama models.
 
 ## Tests
 
