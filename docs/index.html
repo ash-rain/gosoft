@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GoDecomp — AI-Powered Binary Decompiler</title>
+  <meta name="description" content="AI-powered binary decompiler with a keyboard-driven TUI. Supports ELF, PE, Mach-O, and .NET assemblies. Fully local with Ollama.">
+  <style>
+    :root {
+      --green: #00ff41;
+      --green-dim: #1a6e1a;
+      --green-muted: #2a6a2a;
+      --bg: #0a0a0a;
+      --bg-card: #111111;
+      --bg-code: #0d1117;
+      --border: #1a3d1a;
+      --text: #c0c0c0;
+      --text-bright: #e0e0e0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+    a { color: var(--green); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Scanline effect */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 255, 65, 0.015) 2px,
+        rgba(0, 255, 65, 0.015) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 40px;
+      text-align: center;
+      position: relative;
+    }
+    .hero h1 {
+      font-size: 3rem;
+      color: var(--green);
+      letter-spacing: 0.05em;
+      text-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
+      margin-bottom: 12px;
+    }
+    .hero .subtitle {
+      font-size: 1.1rem;
+      color: var(--text);
+      max-width: 640px;
+      margin: 0 auto 32px;
+    }
+    .hero .badges {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: var(--green);
+      background: var(--bg-card);
+    }
+
+    /* Terminal mockup */
+    .terminal {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-width: 760px;
+      margin: 0 auto 60px;
+      overflow: hidden;
+      text-align: left;
+    }
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      background: #161b22;
+      border-bottom: 1px solid var(--border);
+    }
+    .terminal-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+    .terminal-dot.r { background: #ff5f57; }
+    .terminal-dot.y { background: #febc2e; }
+    .terminal-dot.g { background: #28c840; }
+    .terminal-bar span {
+      margin-left: 8px;
+      font-size: 0.75rem;
+      color: #666;
+    }
+    .terminal pre {
+      padding: 16px 20px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      color: var(--green);
+      overflow-x: auto;
+    }
+
+    /* Sections */
+    section {
+      padding: 48px 0;
+    }
+    section h2 {
+      font-size: 1.5rem;
+      color: var(--green);
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    section h3 {
+      font-size: 1.1rem;
+      color: var(--green-muted);
+      margin: 24px 0 8px;
+    }
+
+    /* Feature grid */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .feature {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+    }
+    .feature .icon {
+      font-size: 1.6rem;
+      margin-bottom: 8px;
+    }
+    .feature h3 {
+      color: var(--green);
+      margin: 0 0 6px;
+      font-size: 1rem;
+    }
+    .feature p {
+      font-size: 0.88rem;
+      color: var(--text);
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 24px;
+      font-size: 0.88rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--green);
+      font-weight: 600;
+    }
+
+    /* Code blocks */
+    code {
+      background: var(--bg-code);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.88em;
+      color: var(--green);
+    }
+    pre {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 18px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      color: var(--text-bright);
+      margin: 8px 0 16px;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+
+    /* Key binding list */
+    .keybindings {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 4px 32px;
+      margin: 12px 0;
+    }
+    .keybind {
+      display: flex;
+      gap: 12px;
+      padding: 4px 0;
+      font-size: 0.88rem;
+    }
+    .keybind kbd {
+      display: inline-block;
+      min-width: 60px;
+      text-align: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 8px;
+      color: var(--green);
+      font-family: inherit;
+      font-size: 0.82rem;
+      flex-shrink: 0;
+    }
+
+    /* CTA */
+    .cta {
+      text-align: center;
+      padding: 48px 0 80px;
+    }
+    .cta-button {
+      display: inline-block;
+      padding: 12px 32px;
+      background: transparent;
+      border: 2px solid var(--green);
+      color: var(--green);
+      font-family: inherit;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .cta-button:hover {
+      background: var(--green);
+      color: var(--bg);
+      text-decoration: none;
+      box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+    }
+
+    /* Footer */
+    footer {
+      padding: 24px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.8rem;
+      color: #444;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 2rem; }
+      .terminal pre { font-size: 0.7rem; }
+      .features { grid-template-columns: 1fr; }
+      .keybindings { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Hero -->
+  <header class="hero">
+    <h1>GoDecomp</h1>
+    <p class="subtitle">
+      AI-powered binary decompiler with a keyboard-driven TUI and scriptable CLI.
+      Fully local — no API keys, no data leaves your machine.
+    </p>
+    <div class="badges">
+      <span class="badge">ELF</span>
+      <span class="badge">PE</span>
+      <span class="badge">Mach-O</span>
+      <span class="badge">.NET / Mono</span>
+      <span class="badge">x86 / x64</span>
+      <span class="badge">ARM / ARM64</span>
+      <span class="badge">CIL / MSIL</span>
+      <span class="badge">Pure Go</span>
+    </div>
+  </header>
+
+  <!-- Terminal preview -->
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="terminal-dot r"></div>
+      <div class="terminal-dot y"></div>
+      <div class="terminal-dot g"></div>
+      <span>godecomp explore /usr/bin/ls</span>
+    </div>
+    <pre>┌──────────────────────────┬──────────────────────────────────────────────────┐
+│ <span style="color:#0f0;font-weight:bold">[F]uncs</span> [S]trings ...    │ <span style="color:#0f0;font-weight:bold">[1]Source</span>  [2]Disasm  [3]Hex                    │
+│ ──────────────────────   │ ──────────────────────────────────────────────── │
+│ &gt; Namespace.Type::Main   │  func Main() {                                  │
+│   .ctor                  │    args := os.Args                              │
+│   ParseArgs              │    if len(args) &lt; 2 {                           │
+│   PrintHelp              │      PrintHelp()                                │
+│   ...                    │      return                                     │
+│                          │    }                                            │
+│                          │  }                                              │
+├──────────────────────────┴──────────────────────────────────────────────────┤
+│ [tab] focus [enter] preview [d] AI decompile [l] lang [c] chat [q] quit   │
+│ /usr/bin/ls  linux/x86_64  ELF  lang:go  Ready                            │
+└────────────────────────────────────────────────────────────────────────────┘</pre>
+  </div>
+
+  <!-- Features -->
+  <section>
+    <h2>Features</h2>
+    <div class="features">
+      <div class="feature">
+        <div class="icon">🔍</div>
+        <h3>Multi-Format Support</h3>
+        <p>Load ELF, PE, Mach-O, and .NET/Mono assemblies. Auto-detects format from magic bytes and CLR metadata.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🧠</div>
+        <h3>AI Decompilation</h3>
+        <p>Uses local Ollama models to produce clean, idiomatic code in Go, C, Rust, Python, TypeScript, Java, or C#.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">⚡</div>
+        <h3>Instant Offline Preview</h3>
+        <p>Quick pseudo-code decompilation without AI. Browse functions and see translated pseudo-code instantly.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">⌨️</div>
+        <h3>Keyboard-Driven TUI</h3>
+        <p>Navigate symbols, disassembly, hex, and source with Vim-style keys. Filter, search, and chat — all from the terminal.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🔧</div>
+        <h3>Built-in Disassemblers</h3>
+        <p>Pure Go disassemblers for x86/x64, ARM/ARM64, and ECMA-335 IL. No external dependencies like capstone.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">💬</div>
+        <h3>AI Chat</h3>
+        <p>Ask questions about the binary — "what libraries does this use?" or "find all network calls" — right inside the TUI.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quick Start -->
+  <section>
+    <h2>Quick Start</h2>
+    <h3>Install</h3>
+    <pre><code>git clone https://github.com/ash-rain/gosoft.git
+cd gosoft
+go build -o godecomp ./cmd/godecomp</code></pre>
+
+    <h3>Explore a binary</h3>
+    <pre><code>godecomp explore /usr/bin/ls
+godecomp explore MyApp.exe
+godecomp explore MyAssembly.dll</code></pre>
+
+    <h3>Decompile from CLI</h3>
+    <pre><code># Single function
+godecomp decompile /usr/bin/ls --func main --lang go
+
+# Stream token-by-token
+godecomp decompile /usr/bin/ls --func main --lang rust --stream
+
+# All functions to a directory
+godecomp decompile MyApp.exe --all --lang csharp --out ./src/</code></pre>
+
+    <h3>Other commands</h3>
+    <pre><code>godecomp symbols /usr/bin/ls               # List functions
+godecomp strings /usr/bin/ls               # Extract strings
+godecomp ask /usr/bin/ls "what does main do?"  # Ask AI
+godecomp models                            # List Ollama models</code></pre>
+  </section>
+
+  <!-- Key Bindings -->
+  <section>
+    <h2>Key Bindings</h2>
+    <div class="keybindings">
+      <div class="keybind"><kbd>tab</kbd> Switch panel focus</div>
+      <div class="keybind"><kbd>j / k</kbd> Navigate + auto-preview</div>
+      <div class="keybind"><kbd>enter</kbd> Quick offline preview</div>
+      <div class="keybind"><kbd>d</kbd> AI decompile via Ollama</div>
+      <div class="keybind"><kbd>f s i x</kbd> Left tabs</div>
+      <div class="keybind"><kbd>1 2 3</kbd> Source / Disasm / Hex</div>
+      <div class="keybind"><kbd>l</kbd> Cycle target language</div>
+      <div class="keybind"><kbd>m</kbd> Select Ollama model</div>
+      <div class="keybind"><kbd>/</kbd> Filter symbols</div>
+      <div class="keybind"><kbd>c</kbd> Chat with AI</div>
+      <div class="keybind"><kbd>?</kbd> Help overlay</div>
+      <div class="keybind"><kbd>q</kbd> Quit</div>
+    </div>
+  </section>
+
+  <!-- Supported Formats -->
+  <section>
+    <h2>Supported Formats</h2>
+    <table>
+      <tr><th>Format</th><th>Detection</th></tr>
+      <tr><td>ELF</td><td><code>\x7fELF</code> magic</td></tr>
+      <tr><td>PE (Windows)</td><td><code>MZ</code> magic</td></tr>
+      <tr><td>.NET / Mono</td><td>PE + CLR metadata (DataDirectory[14])</td></tr>
+      <tr><td>Mach-O</td><td><code>\xfe\xed\xfa</code> and fat binary magic</td></tr>
+    </table>
+
+    <table>
+      <tr><th>Architecture</th><th>Disassembler</th></tr>
+      <tr><td>x86 / x86-64</td><td>Pure Go (<code>golang.org/x/arch</code>)</td></tr>
+      <tr><td>ARM / ARM64</td><td>Pure Go ARM</td></tr>
+      <tr><td>.NET IL / CIL</td><td>Built-in ECMA-335 IL disassembler</td></tr>
+      <tr><td>MIPS</td><td>Symbol extraction only</td></tr>
+    </table>
+  </section>
+
+  <!-- Target Languages -->
+  <section>
+    <h2>Target Languages</h2>
+    <div class="badges" style="justify-content:flex-start;">
+      <span class="badge">Go</span>
+      <span class="badge">C</span>
+      <span class="badge">Rust</span>
+      <span class="badge">Python</span>
+      <span class="badge">TypeScript</span>
+      <span class="badge">Java</span>
+      <span class="badge">C#</span>
+    </div>
+    <p style="margin-top:12px;">
+      Cycle through them with <kbd style="background:var(--bg-card);border:1px solid var(--border);border-radius:3px;padding:1px 6px;color:var(--green);font-family:inherit;">l</kbd> in the TUI, or pass <code>--lang &lt;name&gt;</code> on the CLI.
+    </p>
+  </section>
+
+  <!-- AI Providers -->
+  <section>
+    <h2>AI Providers</h2>
+    <table>
+      <tr><th>Provider</th><th>Config</th><th>Notes</th></tr>
+      <tr><td>Ollama (default)</td><td><code>--ollama-url</code>, <code>--model</code></td><td>Fully local, no API key</td></tr>
+      <tr><td>OpenCode / cloud</td><td><code>--opencode-url</code>, <code>--opencode-key</code></td><td>Free-tier cloud fallback</td></tr>
+    </table>
+    <h3>Recommended models</h3>
+    <pre><code>ollama pull deepseek-coder:latest   # fast, good quality
+ollama pull deepseek-coder:33b     # best quality
+ollama pull codellama:13b          # alternative</code></pre>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta">
+    <a class="cta-button" href="https://github.com/ash-rain/gosoft">View on GitHub →</a>
+  </div>
+
+</div>
+
+<footer>
+  <div class="container">
+    GoDecomp — built with Go · <a href="https://github.com/ash-rain/gosoft">GitHub</a>
+  </div>
+</footer>
+
+</body>
+</html>
