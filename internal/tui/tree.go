@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	binpkg "godecomp/internal/binary"
+	binpkg "softy/internal/binary"
 
 	"github.com/charmbracelet/lipgloss"
 )

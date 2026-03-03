@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"godecomp/internal/ai"
-	"godecomp/internal/binary"
+	"softy/internal/ai"
+	"softy/internal/binary"
 )
 
 // mockProvider is a mock AI provider for testing.

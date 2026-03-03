@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"godecomp/internal/ai"
-	binpkg "godecomp/internal/binary"
-	ctxpkg "godecomp/internal/context"
-	"godecomp/internal/disasm"
-	"godecomp/internal/symbols"
+	"softy/internal/ai"
+	binpkg "softy/internal/binary"
+	ctxpkg "softy/internal/context"
+	"softy/internal/disasm"
+	"softy/internal/symbols"
 )
 
 // Options configures the decompilation pipeline.

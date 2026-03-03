@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	ctxpkg "godecomp/internal/context"
-	"godecomp/internal/disasm"
+	ctxpkg "softy/internal/context"
+	"softy/internal/disasm"
 )
 
 // ── Analysis types ────────────────────────────────────────────────────────

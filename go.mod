@@ -1,4 +1,4 @@
-module godecomp
+module softy
 
 go 1.25.0
 

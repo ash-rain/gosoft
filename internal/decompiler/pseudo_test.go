@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"godecomp/internal/binary"
-	ctxpkg "godecomp/internal/context"
-	"godecomp/internal/disasm"
+	"softy/internal/binary"
+	ctxpkg "softy/internal/context"
+	"softy/internal/disasm"
 )
 
 func TestQuickDecompile_AllLanguages(t *testing.T) {

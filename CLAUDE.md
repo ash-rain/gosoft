@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Build
-go build -o godecomp ./cmd/godecomp
+go build -o softy ./cmd/softy
 
 # Run all tests
 go test ./...
@@ -27,12 +27,12 @@ go vet ./...
 The project is a binary decompiler. Data flows in one direction through four layers:
 
 ```
-CLI/TUI  →  pkg/godecomp (Session API)  →  internal pipeline  →  AI provider
+CLI/TUI  →  pkg/softy (Session API)  →  internal pipeline  →  AI provider
 ```
 
-**Entry point**: `cmd/godecomp/main.go` — Cobra CLI with six subcommands (`decompile`, `explore`, `symbols`, `strings`, `ask`, `models`). `explore` launches the TUI; all others are scriptable.
+**Entry point**: `cmd/softy/main.go` — Cobra CLI with six subcommands (`decompile`, `explore`, `symbols`, `strings`, `ask`, `models`). `explore` launches the TUI; all others are scriptable.
 
-**Public API**: `pkg/godecomp/api.go` — `Open(path, Config)` returns a `Session` that wraps a loaded `*Binary` and a `*Pipeline`. The CLI and TUI both go through this.
+**Public API**: `pkg/softy/api.go` — `Open(path, Config)` returns a `Session` that wraps a loaded `*Binary` and a `*Pipeline`. The CLI and TUI both go through this.
 
 **Core pipeline** (`internal/decompiler/pipeline.go`):
 1. `symbols.FindSymbol` locates the target function
@@ -54,4 +54,5 @@ CLI/TUI  →  pkg/godecomp (Session API)  →  internal pipeline  →  AI provid
 - **Section.Offset** stores the file offset for ELF/PE/MachO sections, but **RVA** for .NET IL sections — this is intentional so `context.Build` can match `sym.Address` (also an RVA) against `sec.Offset`.
 - `decompiler.LangExtension` and `decompiler.LangDisplayName` are the canonical source for language metadata — don't duplicate them in `main.go`.
 - The `IL:` section name prefix is a convention used in two places: `loadDotNet` (creates them) and `tui/app.go` (filters them from the Sections list).
-- The `m` key in the TUI is documented (README) as opening a model picker that lists locally downloaded Ollama models — it is not yet implemented in `app.go`.
+- The `m` key in the TUI opens a model picker that lists locally downloaded Ollama models.
+- The `l` key in the TUI opens a language picker overlay.

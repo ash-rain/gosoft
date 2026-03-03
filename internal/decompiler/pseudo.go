@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	ctxpkg "godecomp/internal/context"
+	ctxpkg "softy/internal/context"
 )
 
 // QuickDecompile generates pseudo-code from disassembly without an AI provider.

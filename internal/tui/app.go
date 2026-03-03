@@ -11,11 +11,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"godecomp/internal/ai"
-	binpkg "godecomp/internal/binary"
-	ctxpkg "godecomp/internal/context"
-	"godecomp/internal/decompiler"
-	"godecomp/internal/symbols"
+	"softy/internal/ai"
+	binpkg "softy/internal/binary"
+	ctxpkg "softy/internal/context"
+	"softy/internal/decompiler"
+	"softy/internal/symbols"
 )
 
 // ── Colours & Styles ──────────────────────────────────────────────────────
@@ -751,7 +751,7 @@ func (m Model) viewStatus() string {
 }
 
 func (m Model) viewHelp() string {
-	help := `  GoDecomp — Keyboard Reference
+	help := `  Softy — Keyboard Reference
 
   Navigation
     tab          Switch focus between left and right panel
@@ -1057,7 +1057,7 @@ func (m Model) dims() (lw, rw, ch int) {
 
 func welcomeContent(b *binpkg.Binary) string {
 	funcs := symbols.FunctionList(b)
-	return fmt.Sprintf(`  GoDecomp — AI-Powered Binary Decompiler
+	return fmt.Sprintf(`  Softy — AI-Powered Binary Decompiler
 
   Binary   %s
   Format   %-12s  Arch  %s (%d-bit)

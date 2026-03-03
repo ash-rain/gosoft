@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"godecomp/internal/binary"
-	"godecomp/internal/disasm"
+	"softy/internal/binary"
+	"softy/internal/disasm"
 )
 
 // FunctionContext holds all context needed for LLM decompilation.

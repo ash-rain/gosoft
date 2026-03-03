@@ -3,7 +3,7 @@ package symbols
 import (
 	"testing"
 
-	"godecomp/internal/binary"
+	"softy/internal/binary"
 )
 
 // makeMockBinary creates a mock binary for testing.

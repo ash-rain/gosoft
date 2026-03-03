@@ -1,4 +1,4 @@
-# GoDecomp
+# Softy
 
 AI-powered binary decompiler with a keyboard-driven TUI and scriptable CLI.
 Supports ELF, PE, Mach-O, and .NET/Mono assemblies across x86, x86-64, ARM, ARM64, and MIPS.
@@ -25,7 +25,7 @@ Uses a local [Ollama](https://ollama.com) model by default — no API keys, no d
 
 - **Go 1.21+**
 - **[Ollama](https://ollama.com)** running locally (default: `http://localhost:11434`)
-- At least one Ollama model pulled, e.g. `ollama pull deepseek-coder:latest`
+- At least one Ollama model pulled, e.g. `ollama pull minimax-m2.5:cloud`
 
 ## Build
 
@@ -33,13 +33,13 @@ Uses a local [Ollama](https://ollama.com) model by default — no API keys, no d
 git clone <repo>
 cd gosoft
 
-go build -o godecomp ./cmd/godecomp
+go build -o softy ./cmd/softy
 ```
 
 Or install directly to `$GOPATH/bin`:
 
 ```bash
-go install ./cmd/godecomp
+go install ./cmd/softy
 ```
 
 ## Run
@@ -47,50 +47,50 @@ go install ./cmd/godecomp
 ### Interactive TUI
 
 ```bash
-godecomp explore /usr/bin/ls
-godecomp explore MyApp.exe          # PE or .NET assembly
-godecomp explore MyAssembly.dll     # .NET/Mono DLL
+softy explore /usr/bin/ls
+softy explore MyApp.exe          # PE or .NET assembly
+softy explore MyAssembly.dll     # .NET/Mono DLL
 ```
 
 ### Decompile a function
 
 ```bash
 # Single function, printed to stdout
-godecomp decompile /usr/bin/ls --func main --lang go
+softy decompile /usr/bin/ls --func main --lang go
 
 # Stream output token-by-token
-godecomp decompile /usr/bin/ls --func main --lang rust --stream
+softy decompile /usr/bin/ls --func main --lang rust --stream
 
 # Decompile all functions to a directory
-godecomp decompile MyApp.exe --all --lang csharp --out ./src/
+softy decompile MyApp.exe --all --lang csharp --out ./src/
 ```
 
 ### List symbols
 
 ```bash
-godecomp symbols /usr/bin/ls                    # functions (default)
-godecomp symbols /usr/bin/ls --type imports
-godecomp symbols /usr/bin/ls --type exports
+softy symbols /usr/bin/ls                    # functions (default)
+softy symbols /usr/bin/ls --type imports
+softy symbols /usr/bin/ls --type exports
 ```
 
 ### Extract strings
 
 ```bash
-godecomp strings /usr/bin/ls
-godecomp strings MyApp.exe --filter http        # filter by keyword
+softy strings /usr/bin/ls
+softy strings MyApp.exe --filter http        # filter by keyword
 ```
 
 ### Ask AI a question
 
 ```bash
-godecomp ask /usr/bin/ls "what libraries does this use?"
-godecomp ask MyApp.exe "find all network calls"
+softy ask /usr/bin/ls "what libraries does this use?"
+softy ask MyApp.exe "find all network calls"
 ```
 
 ### List available Ollama models
 
 ```bash
-godecomp models
+softy models
 ```
 
 ## TUI Key Bindings
@@ -109,7 +109,7 @@ godecomp models
 | `2` | Right tab: Disassembly |
 | `3` | Right tab: Hex dump |
 | `d` / `enter` | Decompile selected function (or hex-view selected section) |
-| `l` | Cycle target language |
+| `l` | Select target language |
 | `m` | Select AI model from downloaded Ollama models |
 | `c` | Open chat — ask AI about the binary |
 | `?` | Help overlay |
@@ -149,7 +149,7 @@ The router prefers Ollama and falls back to the cloud provider if Ollama is unav
 Recommended models:
 
 ```bash
-ollama pull deepseek-coder:latest  # fast, good quality
+ollama pull minimax-m2.5:cloud  # fast, good quality
 ollama pull deepseek-coder:33b    # best quality
 ollama pull codellama:13b         # alternative
 ```
@@ -158,7 +158,7 @@ ollama pull codellama:13b         # alternative
 
 ```
 --ollama-url   Ollama API URL          (default: http://localhost:11434)
---model        Model name              (default: deepseek-coder:latest)
+--model        Model name              (default: minimax-m2.5:cloud)
 --opencode-url OpenCode-compatible URL (optional)
 --opencode-key OpenCode API key        (optional)
 ```

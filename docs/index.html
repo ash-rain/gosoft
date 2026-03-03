@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GoDecomp — AI-Powered Binary Decompiler</title>
+  <title>Softy — AI-Powered Binary Decompiler</title>
   <meta name="description" content="AI-powered binary decompiler with a keyboard-driven TUI. Supports ELF, PE, Mach-O, and .NET assemblies. Fully local with Ollama.">
   <style>
     :root {
@@ -284,7 +284,7 @@
 
   <!-- Hero -->
   <header class="hero">
-    <h1>GoDecomp</h1>
+    <h1>Softy</h1>
     <p class="subtitle">
       AI-powered binary decompiler with a keyboard-driven TUI and scriptable CLI.
       Fully local — no API keys, no data leaves your machine.
@@ -307,7 +307,7 @@
       <div class="terminal-dot r"></div>
       <div class="terminal-dot y"></div>
       <div class="terminal-dot g"></div>
-      <span>godecomp explore /usr/bin/ls</span>
+      <span>softy explore /usr/bin/ls</span>
     </div>
     <pre>┌──────────────────────────┬──────────────────────────────────────────────────┐
 │ <span style="color:#0f0;font-weight:bold">[F]uncs</span> [S]trings ...    │ <span style="color:#0f0;font-weight:bold">[1]Source</span>  [2]Disasm  [3]Hex                    │
@@ -368,28 +368,28 @@
     <h3>Install</h3>
     <pre><code>git clone https://github.com/ash-rain/gosoft.git
 cd gosoft
-go build -o godecomp ./cmd/godecomp</code></pre>
+go build -o softy ./cmd/softy</code></pre>
 
     <h3>Explore a binary</h3>
-    <pre><code>godecomp explore /usr/bin/ls
-godecomp explore MyApp.exe
-godecomp explore MyAssembly.dll</code></pre>
+    <pre><code>softy explore /usr/bin/ls
+softy explore MyApp.exe
+softy explore MyAssembly.dll</code></pre>
 
     <h3>Decompile from CLI</h3>
     <pre><code># Single function
-godecomp decompile /usr/bin/ls --func main --lang go
+softy decompile /usr/bin/ls --func main --lang go
 
 # Stream token-by-token
-godecomp decompile /usr/bin/ls --func main --lang rust --stream
+softy decompile /usr/bin/ls --func main --lang rust --stream
 
 # All functions to a directory
-godecomp decompile MyApp.exe --all --lang csharp --out ./src/</code></pre>
+softy decompile MyApp.exe --all --lang csharp --out ./src/</code></pre>
 
     <h3>Other commands</h3>
-    <pre><code>godecomp symbols /usr/bin/ls               # List functions
-godecomp strings /usr/bin/ls               # Extract strings
-godecomp ask /usr/bin/ls "what does main do?"  # Ask AI
-godecomp models                            # List Ollama models</code></pre>
+    <pre><code>softy symbols /usr/bin/ls               # List functions
+softy strings /usr/bin/ls               # Extract strings
+softy ask /usr/bin/ls "what does main do?"  # Ask AI
+softy models                            # List Ollama models</code></pre>
   </section>
 
   <!-- Key Bindings -->
@@ -402,7 +402,7 @@ godecomp models                            # List Ollama models</code></pre>
       <div class="keybind"><kbd>d</kbd> AI decompile via Ollama</div>
       <div class="keybind"><kbd>f s i x</kbd> Left tabs</div>
       <div class="keybind"><kbd>1 2 3</kbd> Source / Disasm / Hex</div>
-      <div class="keybind"><kbd>l</kbd> Cycle target language</div>
+      <div class="keybind"><kbd>l</kbd> Select target language</div>
       <div class="keybind"><kbd>m</kbd> Select Ollama model</div>
       <div class="keybind"><kbd>/</kbd> Filter symbols</div>
       <div class="keybind"><kbd>c</kbd> Chat with AI</div>
@@ -457,7 +457,7 @@ godecomp models                            # List Ollama models</code></pre>
       <tr><td>OpenCode / cloud</td><td><code>--opencode-url</code>, <code>--opencode-key</code></td><td>Free-tier cloud fallback</td></tr>
     </table>
     <h3>Recommended models</h3>
-    <pre><code>ollama pull deepseek-coder:latest   # fast, good quality
+    <pre><code>ollama pull minimax-m2.5:cloud   # fast, good quality
 ollama pull deepseek-coder:33b     # best quality
 ollama pull codellama:13b          # alternative</code></pre>
   </section>
@@ -471,7 +471,7 @@ ollama pull codellama:13b          # alternative</code></pre>
 
 <footer>
   <div class="container">
-    GoDecomp — built with Go · <a href="https://github.com/ash-rain/gosoft">GitHub</a>
+    Softy — built with Go · <a href="https://github.com/ash-rain/gosoft">GitHub</a>
   </div>
 </footer>
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	binpkg "godecomp/internal/binary"
+	binpkg "softy/internal/binary"
 )
 
 // symbolItem wraps a function symbol for the left panel list.

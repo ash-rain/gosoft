@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"godecomp/internal/disasm"
+	"softy/internal/disasm"
 )
 
 // formatDisassembly renders a slice of instructions for the viewport.

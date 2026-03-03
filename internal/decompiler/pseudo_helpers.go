@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"godecomp/internal/disasm"
+	"softy/internal/disasm"
 )
 
 // ── Language helpers ──────────────────────────────────────────────────────

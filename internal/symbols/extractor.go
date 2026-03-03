@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"godecomp/internal/binary"
+	"softy/internal/binary"
 )
 
 // FunctionList returns only function-type symbols sorted by address.
