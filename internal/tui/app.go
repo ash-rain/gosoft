@@ -150,18 +150,22 @@ type Model struct {
 
 	chatInput  textinput.Model
 	chatActive bool
-	chatBuffer strings.Builder
+	chatBuffer *strings.Builder
 	chatChan   chan ai.StreamChunk
 
 	streaming  bool
 	streamChan chan ai.StreamChunk
-	streamBuf  strings.Builder
+	streamBuf  *strings.Builder
 	cancelFunc context.CancelFunc
 
 	// Model picker
 	modelPicker     list.Model
 	modelPickerOn   bool
 	availableModels []string
+
+	// Language picker
+	langPicker   list.Model
+	langPickerOn bool
 
 	targetLang string
 	statusMsg  string
@@ -238,6 +242,8 @@ func NewModel(b *binpkg.Binary, pipeline *decompiler.Pipeline, cfg TUIConfig) Mo
 		chatInput:  chat,
 		targetLang: "go",
 		statusMsg:  status,
+		chatBuffer: &strings.Builder{},
+		streamBuf:  &strings.Builder{},
 	}
 	m.viewer.Style = lipgloss.NewStyle().Foreground(colorGreen)
 	m.setRight(rightTabSource, welcomeContent(b))
@@ -399,6 +405,30 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Language picker overlay
+	if m.langPickerOn {
+		switch key {
+		case "enter":
+			sel := m.langPicker.SelectedItem()
+			if sel != nil {
+				if item, ok := sel.(langItem); ok {
+					m.langPickerOn = false
+					m.targetLang = item.key
+					m.statusMsg = "Language: " + decompiler.LangDisplayName(item.key)
+					return m, nil
+				}
+			}
+		case "esc", "q":
+			m.langPickerOn = false
+			return m, nil
+		default:
+			var cmd tea.Cmd
+			m.langPicker, cmd = m.langPicker.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+	}
+
 	if m.focus == focusChat {
 		switch key {
 		case "enter":
@@ -504,8 +534,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.viewer.SetContent(m.wrappedContent(m.rightTab))
 	case "l":
-		m.targetLang = cycleLang(m.targetLang)
-		m.statusMsg = "Language: " + decompiler.LangDisplayName(m.targetLang)
+		m.openLangPicker()
+		return m, nil
 	case "m":
 		m.statusMsg = "Loading models…"
 		return m, m.loadModels()
@@ -608,6 +638,9 @@ func (m Model) View() string {
 	}
 	if m.modelPickerOn {
 		return m.viewModelPicker()
+	}
+	if m.langPickerOn {
+		return m.viewLangPicker()
 	}
 
 	lw, rw, ch := m.dims()
@@ -747,7 +780,7 @@ func (m Model) viewHelp() string {
   Actions
     enter        Quick preview with offline pseudo-code
     d            AI-decompile selected function via Ollama
-    l            Cycle target language: go → c → rust → python → ts → java → csharp
+    l            Select target language
     m            Select AI model from downloaded Ollama models
     c            Chat — ask AI a question about this binary
     esc          Cancel running decompilation or chat
@@ -1022,16 +1055,6 @@ func (m Model) dims() (lw, rw, ch int) {
 	return
 }
 
-func cycleLang(current string) string {
-	langs := decompiler.SupportedLanguages()
-	for i, l := range langs {
-		if l == current {
-			return langs[(i+1)%len(langs)]
-		}
-	}
-	return "go"
-}
-
 func welcomeContent(b *binpkg.Binary) string {
 	funcs := symbols.FunctionList(b)
 	return fmt.Sprintf(`  GoDecomp — AI-Powered Binary Decompiler
@@ -1122,6 +1145,75 @@ func (m *Model) switchModel(modelName string) tea.Cmd {
 
 	m.statusMsg = fmt.Sprintf("Switched to model: %s", modelName)
 	return nil
+}
+
+// ── Language Picker ───────────────────────────────────────────────────────
+
+// langItem wraps a target language for the list widget.
+type langItem struct {
+	key     string
+	display string
+	current bool
+}
+
+func (i langItem) Title() string {
+	if i.current {
+		return "● " + i.display
+	}
+	return "  " + i.display
+}
+func (i langItem) Description() string {
+	if i.current {
+		return "currently selected"
+	}
+	return i.key
+}
+func (i langItem) FilterValue() string { return i.display }
+
+func (m *Model) openLangPicker() {
+	langs := decompiler.SupportedLanguages()
+	items := make([]list.Item, len(langs))
+	for i, lang := range langs {
+		items[i] = langItem{
+			key:     lang,
+			display: decompiler.LangDisplayName(lang),
+			current: lang == m.targetLang,
+		}
+	}
+	d := newDelegate()
+	m.langPicker = list.New(items, d, 40, 12)
+	m.langPicker.Title = "Select Language"
+	m.langPicker.SetShowTitle(true)
+	m.langPicker.SetFilteringEnabled(false)
+	m.langPicker.SetShowStatusBar(false)
+	m.langPicker.Styles.Title = styleTabActive
+
+	// Pre-select the current language.
+	for i, lang := range langs {
+		if lang == m.targetLang {
+			m.langPicker.Select(i)
+			break
+		}
+	}
+
+	if m.width > 0 && m.height > 0 {
+		pw := m.width - 8
+		ph := m.height - 8
+		if pw > 50 {
+			pw = 50
+		}
+		m.langPicker.SetSize(pw, ph)
+	}
+	m.langPickerOn = true
+}
+
+func (m Model) viewLangPicker() string {
+	box := styleHelpBox.Width(m.width - 4).Render(m.langPicker.View())
+	pad := (m.height - lipgloss.Height(box)) / 2
+	if pad < 0 {
+		pad = 0
+	}
+	return strings.Repeat("\n", pad) + box
 }
 
 // Run starts the TUI application.

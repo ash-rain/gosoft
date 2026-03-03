@@ -37,7 +37,7 @@ models or free cloud AI providers.`,
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&ollamaURL, "ollama-url", "http://localhost:11434",
 		"Ollama API URL")
-	rootCmd.PersistentFlags().StringVar(&model, "model", "deepseek-coder:latest",
+	rootCmd.PersistentFlags().StringVar(&model, "model", "minimax-m2.5:cloud",
 		"AI model to use")
 	rootCmd.PersistentFlags().StringVar(&opencodeURL, "opencode-url", "",
 		"OpenCode-compatible API URL (optional)")
