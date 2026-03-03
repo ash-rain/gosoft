@@ -271,7 +271,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "Decompiled: " + msg.funcName
 			m.rightTab = rightTabSource
 		}
-		m.viewer.SetContent(m.rightContent[m.rightTab])
+		m.viewer.SetContent(m.wrappedContent(m.rightTab))
 		m.viewer.GotoTop()
 
 	case streamChunkMsg:
@@ -287,11 +287,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.setRight(rightTabSource, result)
 			m.rightTab = rightTabSource
-			m.viewer.SetContent(result)
+			m.viewer.SetContent(m.wrappedContent(rightTabSource))
 			m.viewer.GotoTop()
 		} else {
 			m.streamBuf.WriteString(msg.chunk.Text)
-			m.viewer.SetContent(m.streamBuf.String())
+			m.viewer.SetContent(wrapText(m.streamBuf.String(), m.viewer.Width))
 			cmds = append(cmds, m.waitStream())
 		}
 
@@ -300,12 +300,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.chatBuffer.WriteString("\n")
 			content := m.chatBuffer.String()
 			m.setRight(rightTabSource, content)
-			m.viewer.SetContent(content)
+			m.viewer.SetContent(m.wrappedContent(rightTabSource))
 			m.viewer.GotoTop()
 			m.statusMsg = "Chat complete"
 		} else {
 			m.chatBuffer.WriteString(msg.chunk.Text)
-			m.viewer.SetContent(m.chatBuffer.String())
+			m.viewer.SetContent(wrapText(m.chatBuffer.String(), m.viewer.Width))
 			cmds = append(cmds, m.waitChat())
 		}
 
@@ -481,16 +481,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focus = focusLeft
 	case "1":
 		m.rightTab = rightTabSource
-		m.viewer.SetContent(m.rightContent[m.rightTab])
+		m.viewer.SetContent(m.wrappedContent(m.rightTab))
 	case "2":
 		m.rightTab = rightTabDisasm
-		m.viewer.SetContent(m.rightContent[m.rightTab])
+		m.viewer.SetContent(m.wrappedContent(m.rightTab))
 	case "3":
 		m.rightTab = rightTabHex
 		if m.rightContent[rightTabHex] == "" {
 			m.loadSectionHex()
 		}
-		m.viewer.SetContent(m.rightContent[m.rightTab])
+		m.viewer.SetContent(m.wrappedContent(m.rightTab))
 	case "l":
 		m.targetLang = cycleLang(m.targetLang)
 		m.statusMsg = "Language: " + decompiler.LangDisplayName(m.targetLang)
@@ -514,16 +514,25 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.lists[m.leftTab], cmd = m.lists[m.leftTab].Update(msg)
 			return m, cmd
 		}
-	case "d", "enter":
+	case "d":
+		if m.focus == focusLeft && m.leftTab == leftTabFunctions {
+			if m.funcTree.SelectedSymbol() == nil {
+				m.funcTree.Toggle()
+				return m, nil
+			}
+			return m, m.startDecompile()
+		}
+	case "enter":
 		if m.focus == focusLeft {
 			switch m.leftTab {
 			case leftTabFunctions:
 				if m.funcTree.SelectedSymbol() == nil {
-					// Group node: toggle expand/collapse.
 					m.funcTree.Toggle()
 					return m, nil
 				}
-				return m, m.startDecompile()
+				// enter = quick preview (offline pseudo-code)
+				m.quickPreview()
+				return m, nil
 			case leftTabSections:
 				m.loadSectionHex()
 			}
@@ -535,12 +544,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				switch key {
 				case "j", "down":
 					m.funcTree.Down()
+					m.autoPreview()
 				case "k", "up":
 					m.funcTree.Up()
+					m.autoPreview()
 				case "pgup":
 					m.funcTree.PageUp()
+					m.autoPreview()
 				case "pgdown":
 					m.funcTree.PageDown()
+					m.autoPreview()
 				}
 				return m, nil
 			}
@@ -577,7 +590,7 @@ func (m Model) View() string {
 	)
 
 	hint := styleHelp.Width(m.width).Render(
-		" [tab] focus  [f/s/i/x] panel  [1/2/3] view  [d] decompile  [l] lang  [m] model  [c] chat  [?] help  [q] quit",
+		" [tab] focus  [f/s/i/x] panel  [1/2/3] view  [enter] preview  [d] AI decompile  [l] lang  [m] model  [c] chat  [?] help  [q] quit",
 	)
 
 	rows := []string{panels, hint}
@@ -682,14 +695,15 @@ func (m Model) viewHelp() string {
 
   Navigation
     tab          Switch focus between left and right panel
-    j / k        Move up / down in list or tree
+    j / k        Move up / down in list or tree (auto-previews function)
     /            Filter by name  (esc to clear)
     esc          Cancel decompilation / close chat / close help
 
   Functions Tree
     +/-          Expand / collapse module groups
     space        Toggle expand / collapse
-    enter / d    Decompile selected function
+    enter        Quick preview — offline pseudo-code (no AI needed)
+    d            AI decompile selected function via Ollama
     /            Filter functions by name
 
   Left Panel  (tabs)
@@ -699,12 +713,13 @@ func (m Model) viewHelp() string {
     x            Sections
 
   Right Panel  (tabs)
-    1            Source   — AI-decompiled output
+    1            Source   — decompiled / preview output (word-wrapped)
     2            Disasm   — disassembly listing
     3            Hex      — hex dump of selected section
 
   Actions
-    d / enter    Decompile selected function  (or hex-view selected section)
+    enter        Quick preview with offline pseudo-code
+    d            AI-decompile selected function via Ollama
     l            Cycle target language: go → c → rust → python → ts → java → csharp
     m            Select AI model from downloaded Ollama models
     c            Chat — ask AI a question about this binary
@@ -734,9 +749,9 @@ func (m *Model) startDecompile() tea.Cmd {
 	m.populateDisasm(fn)
 
 	if m.pipeline == nil {
-		m.statusMsg = "Ollama not connected — disassembly only"
-		m.rightTab = rightTabDisasm
-		m.viewer.SetContent(m.rightContent[rightTabDisasm])
+		m.statusMsg = fmt.Sprintf("Quick decompile: %s → %s (offline)", fn, decompiler.LangDisplayName(m.targetLang))
+		m.rightTab = rightTabSource
+		m.viewer.SetContent(m.wrappedContent(rightTabSource))
 		m.viewer.GotoTop()
 		return nil
 	}
@@ -745,7 +760,7 @@ func (m *Model) startDecompile() tea.Cmd {
 	m.streamBuf.Reset()
 	m.statusMsg = fmt.Sprintf("Decompiling %s…", fn)
 	m.rightTab = rightTabSource
-	m.viewer.SetContent(fmt.Sprintf("Decompiling %s → %s…\n", fn, m.targetLang))
+	m.viewer.SetContent(wrapText(fmt.Sprintf("Decompiling %s → %s…\n", fn, m.targetLang), m.viewer.Width))
 
 	b := m.binary
 	pipe := m.pipeline
@@ -797,8 +812,40 @@ func (m *Model) loadSectionHex() {
 	m.statusMsg = fmt.Sprintf("Hex: %s (%d B)", item.sec.Name, item.sec.Size)
 }
 
-// populateDisasm builds the function context and fills the Disasm and Hex
-// tabs for the given function, independently of AI decompilation.
+// quickPreview shows the offline pseudo-code for the selected function,
+// switching to the Source tab.
+func (m *Model) quickPreview() {
+	sym := m.funcTree.SelectedSymbol()
+	if sym == nil {
+		return
+	}
+	m.selectedFn = sym.Name
+	m.populateDisasm(sym.Name)
+	m.rightTab = rightTabSource
+	m.viewer.SetContent(m.wrappedContent(rightTabSource))
+	m.viewer.GotoTop()
+	m.statusMsg = fmt.Sprintf("Quick preview: %s → %s", sym.Name, decompiler.LangDisplayName(m.targetLang))
+}
+
+// autoPreview runs a lightweight quick preview when the user navigates
+// the function tree, so the right panel always shows something useful.
+func (m *Model) autoPreview() {
+	sym := m.funcTree.SelectedSymbol()
+	if sym == nil {
+		return
+	}
+	// Don't overwrite an active AI stream.
+	if m.streaming {
+		return
+	}
+	m.selectedFn = sym.Name
+	m.populateDisasm(sym.Name)
+	// Keep whatever tab the user has selected; just update content.
+	m.viewer.SetContent(m.wrappedContent(m.rightTab))
+}
+
+// populateDisasm builds the function context and fills the Disasm, Hex,
+// and Source (quick pseudo-code) tabs for the given function.
 func (m *Model) populateDisasm(funcName string) {
 	funcCtx, err := decompiler.BuildFunctionContext(m.binary, funcName)
 	if err != nil {
@@ -807,6 +854,10 @@ func (m *Model) populateDisasm(funcName string) {
 	}
 	m.setRight(rightTabDisasm, formatDisassembly(funcCtx.Disassembly))
 	m.populateHexFromContext(funcCtx)
+
+	// Generate quick offline pseudo-code for the Source tab.
+	pseudo := decompiler.QuickDecompile(funcCtx, m.targetLang)
+	m.setRight(rightTabSource, pseudo)
 }
 
 // populateHexFromContext fills the Hex tab with the raw bytes of the function.
@@ -840,7 +891,7 @@ func (m *Model) sendChatMessage(question string) tea.Cmd {
 	m.chatBuffer.Reset()
 	m.chatBuffer.WriteString("You: " + question + "\n\nAI: ")
 	m.rightTab = rightTabSource
-	m.viewer.SetContent(m.chatBuffer.String())
+	m.viewer.SetContent(wrapText(m.chatBuffer.String(), m.viewer.Width))
 	m.statusMsg = "Sending chat…"
 
 	ch := make(chan ai.StreamChunk, 128)
@@ -883,10 +934,10 @@ func (m *Model) cancelStream() {
 	if partial != "" {
 		partial += "\n\n— cancelled —"
 		m.setRight(rightTabSource, partial)
-		m.viewer.SetContent(partial)
+		m.viewer.SetContent(m.wrappedContent(rightTabSource))
 	} else {
 		m.setRight(rightTabSource, "(cancelled)")
-		m.viewer.SetContent("(cancelled)")
+		m.viewer.SetContent(m.wrappedContent(rightTabSource))
 	}
 	m.statusMsg = "Cancelled"
 }
@@ -896,8 +947,22 @@ func (m *Model) cancelStream() {
 func (m *Model) setRight(tab rightTab, content string) {
 	m.rightContent[tab] = content
 	if tab == m.rightTab {
-		m.viewer.SetContent(content)
+		m.viewer.SetContent(m.wrappedContent(tab))
 	}
+}
+
+// wrappedContent returns the content for a tab, word-wrapped for the Source
+// tab so that long AI output or pseudo-code doesn't run off-screen.
+func (m *Model) wrappedContent(tab rightTab) string {
+	c := m.rightContent[tab]
+	if tab == rightTabSource {
+		w := m.viewer.Width
+		if w <= 0 {
+			w = 80
+		}
+		return wrapText(c, w)
+	}
+	return c
 }
 
 func (m *Model) recalcSizes() {

@@ -92,3 +92,49 @@ func formatSourceCode(source, lang string) string {
 	}
 	return source
 }
+
+// wrapText wraps long lines to fit within maxWidth columns.
+// It preserves existing newlines and only breaks lines that exceed the width.
+// For the Source tab this makes AI output and pseudo-code readable;
+// Disasm/Hex tabs have fixed-width rows and are left untouched.
+func wrapText(text string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+	var sb strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		if len(line) <= maxWidth {
+			sb.WriteString(line)
+			continue
+		}
+		// Wrap at word boundaries.
+		remaining := line
+		first := true
+		for len(remaining) > 0 {
+			if !first {
+				sb.WriteByte('\n')
+			}
+			first = false
+			if len(remaining) <= maxWidth {
+				sb.WriteString(remaining)
+				break
+			}
+			// Try to break at a space.
+			cut := maxWidth
+			for cut > 0 && remaining[cut] != ' ' {
+				cut--
+			}
+			if cut == 0 {
+				// No space found — hard break.
+				cut = maxWidth
+			}
+			sb.WriteString(remaining[:cut])
+			remaining = strings.TrimLeft(remaining[cut:], " ")
+		}
+	}
+	return sb.String()
+}
