@@ -56,14 +56,25 @@ func SystemPrompt(lang string) string {
 	display := LangDisplayName(lang)
 
 	if lang == "csharp" {
-		return `You are a .NET decompilation expert. Given CIL/MSIL IL bytecode with type and method names,
-produce clean, idiomatic C# code that is functionally equivalent.
-Preserve all logic, types, and method signatures. Add brief inline comments for non-obvious operations.
-Output ONLY valid C# source code, no explanations.`
+		return `You are a .NET decompilation expert. Given CIL/MSIL IL bytecode with full metadata context (type names, method names, field references, calling convention, cross-references, string references), produce clean, idiomatic C# code that is functionally equivalent.
+
+Rules:
+- Infer parameter names and types from ldarg patterns and call targets.
+- Use the calling convention hint and cross-references to determine the function signature.
+- Map string references to actual string literals in the output.
+- Preserve all logic and control flow. Reconstruct if/else, loops, switch from branch patterns.
+- Add brief inline comments for non-obvious operations.
+- Output ONLY valid C# source code, no explanations.`
 	}
 
-	return fmt.Sprintf(`You are a binary decompilation expert. Given disassembly with symbol hints,
-produce clean, idiomatic %s code that is functionally equivalent.
-Preserve all logic. Add brief inline comments for non-obvious operations.
-Output ONLY valid %s source code, no explanations.`, display, display)
+	return fmt.Sprintf(`You are a binary decompilation expert. Given disassembly of a function along with rich context (calling convention, cross-references, symbol table, string references, section info), produce clean, idiomatic %s code that is functionally equivalent.
+
+Rules:
+- Use the calling convention to determine the function signature (parameter registers, return value).
+- Resolve call targets using the provided cross-references and symbol names.
+- Map referenced strings to actual string literals.
+- Reconstruct control flow: if/else, for/while loops, switch statements from compare+branch patterns.
+- Name variables meaningfully based on their usage and the called functions.
+- Preserve all logic. Add brief inline comments for non-obvious operations.
+- Output ONLY valid %s source code, no explanations.`, display, display)
 }
