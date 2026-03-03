@@ -316,6 +316,35 @@ func (tm *TreeModel) SetSize(w, h int) {
 	tm.clampOffset()
 }
 
+// GoToTop moves the cursor to the first row.
+func (tm *TreeModel) GoToTop() {
+	tm.cursor = 0
+	tm.clampOffset()
+}
+
+// GoToBottom moves the cursor to the last row.
+func (tm *TreeModel) GoToBottom() {
+	if len(tm.flat) > 0 {
+		tm.cursor = len(tm.flat) - 1
+	}
+	tm.clampOffset()
+}
+
+// ScrollBy moves the cursor by n rows (negative = up).
+func (tm *TreeModel) ScrollBy(n int) {
+	tm.cursor += n
+	if tm.cursor < 0 {
+		tm.cursor = 0
+	}
+	if tm.cursor >= len(tm.flat) {
+		tm.cursor = len(tm.flat) - 1
+	}
+	if tm.cursor < 0 {
+		tm.cursor = 0
+	}
+	tm.clampOffset()
+}
+
 // SetFilter applies a filter string and rebuilds the visible rows.
 func (tm *TreeModel) SetFilter(f string) {
 	tm.filter = f

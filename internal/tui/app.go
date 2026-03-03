@@ -344,7 +344,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch m.focus {
 	case focusLeft:
-		if m.leftTab != leftTabFunctions {
+		if m.leftTab == leftTabFunctions {
+			// Forward mouse-wheel events to the custom tree.
+			if mouseMsg, ok := msg.(tea.MouseMsg); ok {
+				switch mouseMsg.Type {
+				case tea.MouseWheelUp:
+					m.funcTree.ScrollBy(-3)
+					m.autoPreview()
+				case tea.MouseWheelDown:
+					m.funcTree.ScrollBy(3)
+					m.autoPreview()
+				}
+			}
+		} else {
 			var cmd tea.Cmd
 			m.lists[m.leftTab], cmd = m.lists[m.leftTab].Update(msg)
 			cmds = append(cmds, cmd)
@@ -554,6 +566,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				case "pgdown":
 					m.funcTree.PageDown()
 					m.autoPreview()
+				case "home":
+					m.funcTree.GoToTop()
+					m.autoPreview()
+				case "end":
+					m.funcTree.GoToBottom()
+					m.autoPreview()
 				}
 				return m, nil
 			}
@@ -561,9 +579,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.lists[m.leftTab], cmd = m.lists[m.leftTab].Update(msg)
 			return m, cmd
 		case focusRight:
-			var cmd tea.Cmd
-			m.viewer, cmd = m.viewer.Update(msg)
-			return m, cmd
+			switch key {
+			case "home":
+				m.viewer.GotoTop()
+				return m, nil
+			case "end":
+				m.viewer.GotoBottom()
+				return m, nil
+			default:
+				var cmd tea.Cmd
+				m.viewer, cmd = m.viewer.Update(msg)
+				return m, cmd
+			}
 		}
 	}
 
